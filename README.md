@@ -1,4 +1,3 @@
-```markdown
 # Mango Leaf Disease Prediction
 
 This project is designed to predict mango leaf diseases using machine learning. It includes a Flask web application and a Tkinter-based GUI application for user-friendly interaction.
@@ -92,7 +91,7 @@ Mango Leaf Disease Prediction/
 
 ## License
 
-This project is open-source and available under the [MIT License](LICENSE) (if you choose to include a license).
+This project is open-source and available under the [MIT License](LICENSE) 
 
 ## Contributing
 
