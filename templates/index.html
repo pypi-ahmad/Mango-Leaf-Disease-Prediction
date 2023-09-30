@@ -1,0 +1,18 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Mango Leaf Disease Classifier</title>
+</head>
+<body>
+    <h1>Mango Leaf Disease Classifier</h1>
+    
+    {% if error %}
+    <p style="color: red;">{{ error }}</p>
+    {% endif %}
+    
+    <form method="POST" enctype="multipart/form-data">
+        <input type="file" name="file" accept="image/*">
+        <input type="submit" value="Upload and Classify">
+    </form>
+</body>
+</html>
