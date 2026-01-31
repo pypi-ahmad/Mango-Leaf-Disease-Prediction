@@ -1,100 +1,88 @@
-# Mango Leaf Disease Prediction
+# MangoGuard: Multi-Model Agricultural AI Lab 🥭
 
-This project is designed to predict mango leaf diseases using machine learning. It includes a Flask web application and a Tkinter-based GUI application for user-friendly interaction.
+![PyTorch](https://img.shields.io/badge/PyTorch-%23EE4C2C.svg?style=for-the-badge&logo=PyTorch&logoColor=white)
+![Streamlit](https://img.shields.io/badge/Streamlit-%23FF4B4B.svg?style=for-the-badge&logo=Streamlit&logoColor=white)
+![Grad-CAM](https://img.shields.io/badge/Grad--CAM-Explainable%20AI-blue?style=for-the-badge)
+![Models](https://img.shields.io/badge/EfficientNet%20|%20DenseNet%20|%20ResNet%20|%20MobileNet-green?style=for-the-badge)
 
-## Table of Contents
-- [Introduction](#introduction)
-- [Web Application](#web-application)
-  - [Usage](#web-application-usage)
-- [GUI Application](#gui-application)
-  - [Usage](#gui-application-usage)
-- [Project Structure](#project-structure)
-- [License](#license)
-- [Contributing](#contributing)
+> **State-of-the-Art Leaf Disease Diagnosis with Consensus Voting & Explainable AI.**
 
-## Introduction
+---
 
-Mango Leaf Disease Prediction is a project that uses a trained machine learning model to classify diseases in mango leaves based on input images. The project consists of two main components: a web application and a GUI application.
+## 🌍 Project Overview
 
-## Web Application
+**Problem**: Early detection of mango crop diseases like **Anthracnose**, **Bacterial Canker**, and **Powdery Mildew** is critical for food security and farmer livelihood. Traditional manual inspection is slow and prone to error.
 
-The web application allows users to upload an image of a mango leaf, and it provides real-time predictions for the disease type. It uses a Flask backend for image processing and prediction.
+**Solution**: MangoGuard employs a **"Committee of Machines"** approach. Instead of relying on a single AI model, we orchestrate **4 distinct Deep Learning architectures** (DenseNet121, MobileNetV3, ResNet18, EfficientNet-B0) to vote on the diagnosis. This ensemble method reduces bias and increases reliability.
 
-### Web Application Usage
+**Key Value**: We don't just give you a label; we show you **why**. Using **Grad-CAM (Gradient-weighted Class Activation Mapping)**, we visualize the exact regions of the leaf that triggered the diagnosis, creating a "Trust Layer" between the AI and the agronomist.
 
-1. Clone the repository to your local machine:
+---
 
-```bash
-git clone https://github.com/pypi-ahmad/mango-leaf-disease-prediction.git
-cd mango-leaf-disease-prediction
-```
+## ✨ Key Features
 
-2. Install the required Python packages (you may want to use a virtual environment):
+*   **🗳️ Consensus Diagnosis**: Four SOTA models analyze the image independently and vote. The system aggregates these votes to provide a high-confidence consensus prediction.
+*   **🧠 Visual Explainability**: See what the AI sees. Compare side-by-side **Grad-CAM heatmaps** from different architectures to verify that the model is looking at the disease lesions, not the background.
+*   **📊 Performance Radar**: Interactive **Plotly radar charts** visualize the strengths and weaknesses of each model (Precision vs. Recall vs. F1-Score).
+*   **⚡ Lightweight & Fast**: Includes **MobileNetV3-Large**, optimized for mobile and edge deployment, proving that high accuracy doesn't always need heavy compute.
 
-```bash
-pip install -r requirements.txt
-```
+---
 
-3. Run the web application:
+## 🏆 Performance Benchmarks
 
-```bash
-python WEB_APP.py
-```
+Our "Committee" was trained on the MangoLeafBD Dataset. Here are the validation accuracy results:
 
-4. Open a web browser and navigate to `http://localhost:5000` to use the application.
+| Model Rank | Architecture | Accuracy | Role |
+| :--- | :--- | :--- | :--- |
+| 🥇 **1st** | **DenseNet121** | **99.88%** | The Deep Expert |
+| 🥈 **2nd** | **MobileNetV3** | **99.75%** | The Speedster ⚡ |
+| 🥉 **3rd** | **ResNet18** | **99.38%** | The Classic |
+| 4th | EfficientNet-B0 | 98.88% | The Balanced |
 
-## GUI Application
+---
 
-The GUI application provides a user-friendly interface for uploading and classifying mango leaf images. It uses Tkinter for the graphical interface and the same trained model for predictions.
+## 🛠️ Tech Stack
 
-### GUI Application Usage
+*   **Core AI Engine**: [PyTorch](https://pytorch.org/), [Torchvision](https://pytorch.org/vision/stable/index.html)
+*   **User Interface**: [Streamlit](https://streamlit.io/)
+*   **Visualization**: [Plotly Express](https://plotly.com/python/plotly-express/), [Matplotlib](https://matplotlib.org/)
+*   **Explainable AI (XAI)**: [pytorch-grad-cam](https://github.com/jacobgil/pytorch-grad-cam)
 
-1. Clone the repository to your local machine (if not already done):
+---
 
-```bash
-git clone https://github.com/pypi-ahmad/mango-leaf-disease-prediction.git
-cd mango-leaf-disease-prediction
-```
+## 🚀 Quick Start
 
-2. Install the required Python packages (you may want to use a virtual environment):
-
+### 1. Installation
+Clone the repo and install dependencies (supports CUDA 13.0).
 ```bash
 pip install -r requirements.txt
 ```
 
-3. Run the GUI application:
-
+### 2. Train the "Committee" (The Factory)
+This script automatically downloads the dataset, trains all 4 models, and saves them into a single optimized bundle (`multi_model_bundle.pth`).
 ```bash
-python GUI_APP.py
+python train.py
 ```
 
-4. A window will appear, allowing you to browse and classify images.
-
-## Project Structure
-
-The project is organized as follows:
-
-```
-Mango Leaf Disease Prediction/
-├── WEB_APP.py
-├── GUI_APP.py
-├── mango_leaf_disease_model.h5
-├── templates/
-│   ├── index.html
-│   └── result.html
-├── uploads/
-├── .gitignore
-├── LICENSE (optional)
-├── README.md
-├── requirements.txt
+### 3. Enter the Lab
+Launch the interactive dashboard to diagnose images and explore the models.
+```bash
+streamlit run app.py
 ```
 
-## License
+---
 
-This project is open-source and available under the [MIT License](LICENSE) 
+## 📂 Project Structure
 
-## Contributing
+```text
+📦 MangoGuard-AI-Lab
+ ┣ 📂 data/                   # Dataset (Downloaded automatically)
+ ┣ 📜 app.py                  # Streamlit Dashboard (The Lab)
+ ┣ 📜 train.py                # Multi-Model Training Pipeline (The Factory)
+ ┣ 📜 multi_model_bundle.pth  # The Trained Committee (Models + Metrics)
+ ┣ 📜 requirements.txt        # Dependencies
+ ┗ 📜 README.md               # You are here
+```
 
-Contributions are welcome! If you'd like to contribute to this project or report issues, please visit the [GitHub repository](https://github.com/pypi-ahmad/mango-leaf-disease-prediction) for more information.
-
-Feel free to contribute, report issues, or provide feedback. Happy coding!
+---
+*Created for the Future of Agriculture.* 🥭🤖

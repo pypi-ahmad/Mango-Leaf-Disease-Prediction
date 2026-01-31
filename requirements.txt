@@ -1,4 +1,14 @@
-Pillow
+--extra-index-url https://download.pytorch.org/whl/cu130
+torch
+torchvision
+streamlit
+opencv-python-headless
 numpy
-tensorflow
-flask
+matplotlib
+seaborn
+requests
+pillow
+grad-cam
+scikit-learn
+pandas
+plotly
