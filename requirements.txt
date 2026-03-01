@@ -12,3 +12,4 @@ grad-cam
 scikit-learn
 pandas
 plotly
+pytest

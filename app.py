@@ -2,11 +2,9 @@ import streamlit as st
 import torch
 import torch.nn as nn
 from torchvision import models, transforms
-from PIL import Image
+from PIL import Image, UnidentifiedImageError
 import numpy as np
-import cv2
 import pandas as pd
-import plotly.express as px
 import plotly.graph_objects as go
 import os
 
@@ -24,7 +22,7 @@ st.set_page_config(
 )
 MODEL_PATH = "multi_model_bundle.pth"
 IMG_SIZE = 224
-DEVICE = torch.device("cpu") # CPU for inference stability
+DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 # --- Model Factory (Must match train.py) ---
 def get_model(model_name, num_classes):
@@ -54,6 +52,8 @@ def get_model(model_name, num_classes):
         model.classifier = nn.Linear(model.classifier.in_features, num_classes)
         # DenseNet target layer for GradCAM
         target_layer = model.features.denseblock4.denselayer16
+    else:
+        raise ValueError(f"Unknown model: {model_name}")
     
     return model, target_layer
 
@@ -62,8 +62,30 @@ def load_bundle():
     if not os.path.exists(MODEL_PATH):
         st.error(f"Bundle {MODEL_PATH} not found! Run train.py first.")
         return None
-    
-    checkpoint = torch.load(MODEL_PATH, map_location=DEVICE)
+
+    try:
+        checkpoint = torch.load(MODEL_PATH, map_location=DEVICE, weights_only=True)
+    except Exception as e:
+        st.error(f"Failed to load model bundle: {e}")
+        return None
+
+    required_keys = {"models", "class_names", "metrics"}
+    if not isinstance(checkpoint, dict) or not required_keys.issubset(checkpoint.keys()):
+        st.error("Invalid bundle format. Expected keys: models, class_names, metrics.")
+        return None
+
+    if not isinstance(checkpoint["class_names"], list) or not checkpoint["class_names"]:
+        st.error("Invalid class_names in bundle.")
+        return None
+
+    if not isinstance(checkpoint["models"], dict):
+        st.error("Invalid models in bundle.")
+        return None
+
+    if not isinstance(checkpoint["metrics"], dict):
+        st.error("Invalid metrics in bundle.")
+        return None
+
     return checkpoint
 
 def process_image(image):
@@ -93,7 +115,7 @@ def main():
     selected_models = st.sidebar.multiselect(
         "Active Models", 
         list(trained_models.keys()),
-        default=["DenseNet121", "MobileNetV3-Large"]
+        default=[name for name in ["DenseNet121", "MobileNetV3-Large"] if name in trained_models]
     )
     
     uploaded_file = st.sidebar.file_uploader("Upload Leaf Image", type=["jpg", "png", "jpeg"])
@@ -101,11 +123,18 @@ def main():
     # Tabs
     tab_diagnosis, tab_xai, tab_perf, tab_eda = st.tabs(["🔍 Consensus Diagnosis", "🧠 Explainability (Grad-CAM)", "📊 Performance Lab", "📂 Dataset EDA"])
 
+    image = None
+    if uploaded_file:
+        try:
+            image = Image.open(uploaded_file).convert("RGB")
+        except (UnidentifiedImageError, OSError, ValueError) as e:
+            st.error(f"Invalid image file: {e}")
+            image = None
+
     # --- TAB 1: DIAGNOSIS ---
     with tab_diagnosis:
-        if uploaded_file:
+        if image is not None:
             col1, col2 = st.columns([1, 2])
-            image = Image.open(uploaded_file).convert("RGB")
             
             with col1:
                 st.image(image, caption="Input Leaf", use_container_width=True)
@@ -147,7 +176,7 @@ def main():
 
     # --- TAB 2: EXPLAINABILITY ---
     with tab_xai:
-        if uploaded_file and selected_models:
+        if image is not None and selected_models:
             st.subheader("Visual Attention Comparison")
             st.caption("Red regions show where the model is looking to make its decision.")
             
@@ -214,6 +243,10 @@ def main():
     # --- TAB 4: DATASET EDA ---
     with tab_eda:
         st.subheader("📂 Dataset Distribution")
+
+        if not isinstance(class_names, list) or not class_names:
+            st.info("Invalid class metadata in model bundle.")
+            return
         
         # Count files in the data directory
         data_dir = "data/MangoLeafBD Dataset"

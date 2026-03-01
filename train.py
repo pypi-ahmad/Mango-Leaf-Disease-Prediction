@@ -8,9 +8,8 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 from torchvision import datasets, models, transforms
-from torch.utils.data import DataLoader, random_split
-from sklearn.metrics import precision_score, recall_score, f1_score, accuracy_score
-import numpy as np
+from torch.utils.data import DataLoader, Subset
+from sklearn.metrics import precision_score, recall_score, f1_score
 
 # --- Configuration ---
 DATASET_URL = "https://data.mendeley.com/public-api/zip/hxsnvwty3r/download/1"
@@ -20,26 +19,37 @@ BATCH_SIZE = 32
 EPOCHS = 5  # Reduced to 5 for multi-model demo, user said 5-10
 BUNDLE_PATH = "multi_model_bundle.pth"
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+SEED = 42
+
+
+def safe_extract_zip(zip_file, target_dir):
+    target_dir_abs = os.path.abspath(target_dir)
+    for member in zip_file.namelist():
+        member_path = os.path.abspath(os.path.join(target_dir_abs, member))
+        if not member_path.startswith(target_dir_abs + os.sep) and member_path != target_dir_abs:
+            raise ValueError(f"Unsafe path in archive: {member}")
+    zip_file.extractall(target_dir)
 
 def setup_data():
     """Download and extract dataset."""
     if os.path.exists(DATA_DIR):
-        # Check if empty or valid
-        if not os.listdir(DATA_DIR):
-            print("⚠️ Data directory exists but is empty. Removing...")
-            os.rmdir(DATA_DIR)
-        else:
+        subdirs = [d for d in os.listdir(DATA_DIR) if os.path.isdir(os.path.join(DATA_DIR, d))]
+        if subdirs:
             print("✅ Dataset already exists.")
             return
+        else:
+            print("⚠️ Data directory exists but contains no subdirectories. Removing...")
+            import shutil
+            shutil.rmtree(DATA_DIR)
 
     print("⬇️ Downloading dataset...")
     os.makedirs(DATA_DIR, exist_ok=True)
     try:
-        r = requests.get(DATASET_URL)
+        r = requests.get(DATASET_URL, timeout=60)
         if r.status_code == 200:
             print("📦 Extracting...")
             with zipfile.ZipFile(io.BytesIO(r.content)) as z:
-                z.extractall(DATA_DIR)
+                safe_extract_zip(z, DATA_DIR)
             print("✅ Dataset Ready.")
         else:
             print(f"Error: Status Code {r.status_code}")
@@ -59,6 +69,13 @@ def get_data_loaders():
             base_path = root
             break
     print(f"📂 Loading images from: {base_path}")
+
+    if not os.path.isdir(base_path):
+        raise ValueError(f"Dataset root not found: {base_path}")
+
+    class_dirs = [d for d in os.listdir(base_path) if os.path.isdir(os.path.join(base_path, d))]
+    if not class_dirs:
+        raise ValueError(f"No class folders found in dataset root: {base_path}")
 
     stats = ((0.485, 0.456, 0.406), (0.229, 0.224, 0.225))
     
@@ -80,17 +97,40 @@ def get_data_loaders():
     class_names = full_dataset.classes
     print(f"🌿 Classes: {class_names}")
 
-    train_size = int(0.8 * len(full_dataset))
-    val_size = len(full_dataset) - train_size
-    train_ds, val_ds = random_split(full_dataset, [train_size, val_size])
+    if len(full_dataset) < 3:
+        raise ValueError("Dataset too small for train/val/test split.")
 
-    train_ds.dataset.transform = train_transform
-    val_ds.dataset.transform = val_transform
+    generator = torch.Generator().manual_seed(SEED)
+    shuffled_indices = torch.randperm(len(full_dataset), generator=generator).tolist()
+
+    train_size = int(0.7 * len(full_dataset))
+    val_size = int(0.15 * len(full_dataset))
+    if val_size == 0:
+        val_size = 1
+    test_size = len(full_dataset) - train_size - val_size
+    if test_size <= 0:
+        test_size = 1
+        train_size = len(full_dataset) - val_size - test_size
+        if train_size <= 0:
+            raise ValueError("Dataset too small after split adjustment.")
+
+    train_indices = shuffled_indices[:train_size]
+    val_indices = shuffled_indices[train_size:train_size + val_size]
+    test_indices = shuffled_indices[train_size + val_size:]
+
+    train_dataset = datasets.ImageFolder(base_path, transform=train_transform)
+    val_dataset = datasets.ImageFolder(base_path, transform=val_transform)
+    test_dataset = datasets.ImageFolder(base_path, transform=val_transform)
+
+    train_ds = Subset(train_dataset, train_indices)
+    val_ds = Subset(val_dataset, val_indices)
+    test_ds = Subset(test_dataset, test_indices)
 
     train_loader = DataLoader(train_ds, batch_size=BATCH_SIZE, shuffle=True, num_workers=2)
     val_loader = DataLoader(val_ds, batch_size=BATCH_SIZE, shuffle=False, num_workers=2)
+    test_loader = DataLoader(test_ds, batch_size=BATCH_SIZE, shuffle=False, num_workers=2)
 
-    return train_loader, val_loader, class_names
+    return train_loader, val_loader, test_loader, class_names
 
 def get_model(model_name, num_classes):
     print(f"🏗️ Building {model_name}...")
@@ -133,7 +173,38 @@ def get_model(model_name, num_classes):
 
     return model.to(DEVICE)
 
-def train_one_model(model_name, model, train_loader, val_loader, class_names):
+def _evaluate_loader_metrics(model, data_loader):
+    criterion = nn.CrossEntropyLoss()
+    total_correct = 0
+    all_preds = []
+    all_labels = []
+
+    model.eval()
+    with torch.no_grad():
+        for inputs, labels in data_loader:
+            inputs, labels = inputs.to(DEVICE), labels.to(DEVICE)
+            outputs = model(inputs)
+            _, preds = torch.max(outputs, 1)
+            loss = criterion(outputs, labels)
+
+            total_correct += torch.sum(preds == labels.data)
+            all_preds.extend(preds.cpu().numpy())
+            all_labels.extend(labels.cpu().numpy())
+
+    acc = total_correct.double() / len(data_loader.dataset)
+    p = precision_score(all_labels, all_preds, average='macro', zero_division=0)
+    r = recall_score(all_labels, all_preds, average='macro', zero_division=0)
+    f1 = f1_score(all_labels, all_preds, average='macro', zero_division=0)
+
+    return {
+        'Accuracy': float(acc),
+        'Precision': float(p),
+        'Recall': float(r),
+        'F1-Score': float(f1)
+    }
+
+
+def train_one_model(model_name, model, train_loader, val_loader):
     criterion = nn.CrossEntropyLoss()
     # Optimize only params that require grad
     params_to_update = [p for p in model.parameters() if p.requires_grad]
@@ -152,7 +223,6 @@ def train_one_model(model_name, model, train_loader, val_loader, class_names):
         
         # Train
         model.train()
-        train_loss = 0.0
         train_corrects = 0
         
         for inputs, labels in train_loader:
@@ -166,14 +236,12 @@ def train_one_model(model_name, model, train_loader, val_loader, class_names):
             loss.backward()
             optimizer.step()
             
-            train_loss += loss.item() * inputs.size(0)
             train_corrects += torch.sum(preds == labels.data)
             
         train_acc = train_corrects.double() / len(train_loader.dataset)
         
         # Val
         model.eval()
-        val_loss = 0.0
         val_corrects = 0
         all_preds = []
         all_labels = []
@@ -185,7 +253,6 @@ def train_one_model(model_name, model, train_loader, val_loader, class_names):
                 _, preds = torch.max(outputs, 1)
                 loss = criterion(outputs, labels)
                 
-                val_loss += loss.item() * inputs.size(0)
                 val_corrects += torch.sum(preds == labels.data)
                 
                 all_preds.extend(preds.cpu().numpy())
@@ -218,7 +285,11 @@ def train_one_model(model_name, model, train_loader, val_loader, class_names):
 
 def main():
     setup_data()
-    train_loader, val_loader, class_names = get_data_loaders()
+    try:
+        train_loader, val_loader, test_loader, class_names = get_data_loaders()
+    except Exception as e:
+        print(f"❌ Failed to prepare data loaders: {e}")
+        return
     
     model_names = [
         "EfficientNet-B0",
@@ -234,7 +305,10 @@ def main():
     
     for name in model_names:
         model = get_model(name, len(class_names))
-        state_dict, metrics = train_one_model(name, model, train_loader, val_loader, class_names)
+        state_dict, _ = train_one_model(name, model, train_loader, val_loader)
+
+        model.load_state_dict(state_dict)
+        metrics = _evaluate_loader_metrics(model, test_loader)
         
         trained_models[name] = state_dict
         all_metrics[name] = metrics
