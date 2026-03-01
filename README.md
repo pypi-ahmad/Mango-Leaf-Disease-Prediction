@@ -306,7 +306,7 @@ The bundle is a Python `dict` serialized with `torch.save` and loaded with `torc
 
 ```bash
 # Clone repository
-git clone https://github.com/<your-username>/Mango-Leaf-Disease-Prediction.git
+git clone https://github.com/pypi-ahmad/Mango-Leaf-Disease-Prediction.git
 cd Mango-Leaf-Disease-Prediction
 
 # Create virtual environment
